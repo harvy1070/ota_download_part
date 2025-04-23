@@ -13,11 +13,8 @@ import java.io.File;
 import java.io.IOException;
 import java.util.UUID;
 
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
-import okhttp3.logging.HttpLoggingInterceptor;
 import okio.Buffer;
 import okio.BufferedSink;
 import okio.BufferedSource;
@@ -31,6 +28,7 @@ public class DownloadManager {
     private final File downloadDir;
     private final DownloadCallback callback;
     private final DownloadStateManager stateManager;
+    private final ConnectionManager connectionManager;
 
     private File downloadFile;
     private File tempFile;
@@ -42,6 +40,9 @@ public class DownloadManager {
         this.context = context;
         this.downloadDir = downloadDir;
         this.callback = callback;
+
+        // ConnectionManager 초기화
+        this.connectionManager = new ConnectionManager();
 
         // 파일 경로 및 이름 설정
         downloadFile = new File(downloadDir, "update.bin");
@@ -112,13 +113,6 @@ public class DownloadManager {
     }
 
     private void downloadWithResume() {
-        // HTTP 로깅 인터셉터 설정
-        HttpLoggingInterceptor logging = new HttpLoggingInterceptor(message -> Log.v(TAG, "OKHTTP ▶ " + message));
-        logging.setLevel(HttpLoggingInterceptor.Level.BASIC);
-
-        // OKHTTP 클라이언트 설정
-        OkHttpClient client = new OkHttpClient.Builder().addInterceptor(logging).build();
-
         // 현재 다운로드 상태 가져오기
         DownloadState state = stateManager.loadState();
         if (state == null) {
@@ -135,18 +129,12 @@ public class DownloadManager {
 
         final long finalDownloadedBytes = downloadedBytes;
 
-        // 요청 빌더
-        Request.Builder requestBuilder = new Request.Builder().url(DOWNLOAD_URL);
-
-        // range 헤더 추가 (이어받기)
-        if (downloadedBytes > 0) {
-            requestBuilder.addHeader("Range", "bytes=" + downloadedBytes + "-");
-            Log.d(TAG, "이어받기 요청 ▶ " + downloadedBytes + "바이트부터");
-            callback.onProgressUpdate(0, "이어받기 준비 중... (" + FileUtils.formatFileSize(finalDownloadedBytes) + "부터)");
+        // 서버 가용성 확인
+        if (!connectionManager.isServerAvailable(DOWNLOAD_URL)) {
+            isDownloading = false;
+            callback.onDownloadFailed("서버에 연결할 수 없습니다");
+            return;
         }
-
-        Request request = requestBuilder.build();
-        Log.d(TAG, "HTTPS 요청 시작 ▶ " + DOWNLOAD_URL);
 
         try {
             // 사용자가 취소했는지 확인
@@ -154,8 +142,8 @@ public class DownloadManager {
                 return;
             }
 
-            // 요청 실행
-            Response response = client.newCall(request).execute();
+            // ConnectionManager를 통해 서버에 연결
+            Response response = connectionManager.connect(DOWNLOAD_URL, downloadedBytes);
 
             if (!response.isSuccessful()) {
                 isDownloading = false;
@@ -339,7 +327,7 @@ public class DownloadManager {
                 state.setDownloadedBytes(currentSize);
                 stateManager.saveState(state);
 
-                int progress = (int) (currentSize % 100 / state.getTotalBytes());
+                int progress = (int) (currentSize * 100 / state.getTotalBytes());
                 String message = String.format("다운로드 일시 중단 ▶ %d%% (%s / %s)",
                         progress, FileUtils.formatFileSize(currentSize), FileUtils.formatFileSize(state.getTotalBytes()));
 
