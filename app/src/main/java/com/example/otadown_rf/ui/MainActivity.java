@@ -32,7 +32,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private double currentVersion = 1.0;
 
     // 다운로드 매니저
-    private com.example.otadown_rf.download.DownloadManager downloadManager;
+    private DownloadManager downloadManager;
 
     // 스레드 풀 - 백그라운드 작업 위한 ExecutorService 작업
     private ExecutorService executorService;

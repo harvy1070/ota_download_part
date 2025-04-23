@@ -1,4 +1,4 @@
-package com.example.otadown_rf.download;
+package com.example.otadown_rf.network;
 
 import android.util.Log;
 
