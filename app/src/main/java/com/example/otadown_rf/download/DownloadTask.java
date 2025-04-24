@@ -84,6 +84,9 @@ public class DownloadTask {
             // 전체 파일 크기 확인
             long totalBytes = getTotalBytes(response, responseBody, downloadedBytes);
 
+            // ProgressTracker 업데이트 추가
+            progressTracker.updateTotalBytes(totalBytes);
+
             // 상태 업데이트
             state.setTotalBytes(totalBytes);
             state.setDownloadedBytes(downloadedBytes);

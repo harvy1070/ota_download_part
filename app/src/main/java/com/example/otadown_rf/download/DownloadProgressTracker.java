@@ -12,7 +12,7 @@ public class DownloadProgressTracker {
     private static final String TAG = DownloadProgressTracker.class.getSimpleName();
 
     private final DownloadCallback callback;
-    private final long totalBytes;
+    private long totalBytes;
     private final long initialBytes;
 
     private long bytesReported;
@@ -27,12 +27,20 @@ public class DownloadProgressTracker {
      */
     public DownloadProgressTracker(DownloadCallback callback, long totalBytes, long initialBytes) {
         this.callback = callback;
-        this.totalBytes = totalBytes;
+        this.totalBytes = totalBytes <= 0 ? Long.MAX_VALUE : totalBytes; // 0대신 최소 1로 설정
         this.initialBytes = initialBytes;
         this.bytesReported = initialBytes;
 
         // 5% 단위로 진행 상황 보고를 위한 임계값 설정
         this.reportThreshold = totalBytes > 0 ? totalBytes / 20 : 8192; // 5% 또는 최소 8KB
+    }
+
+    public void updateTotalBytes(long totalBytes) {
+        if (totalBytes > 0) {
+            this.totalBytes = totalBytes;
+            // 임계값도 다시 계산
+            this.reportThreshold = this.totalBytes / 20;
+        }
     }
 
     /**
@@ -47,7 +55,8 @@ public class DownloadProgressTracker {
                             FileUtils.formatFileSize(totalBytes) + ")"
             );
         } else {
-            callback.onProgressUpdate(0, "다운로드 시작 (총 " + FileUtils.formatFileSize(totalBytes) + ")");
+            callback.onProgressUpdate(0, "다운로드 시작 (총 " +
+                    (totalBytes < Long.MAX_VALUE ? FileUtils.formatFileSize(totalBytes) : "알 수 없음") + ")");
         }
     }
 
